@@ -83,6 +83,8 @@ It is indeed possible to observe a significant difference in profiles between re
 
 ## Baseline scenario: lectal distances without semantic control
 
+something to do
+
 Before we venture in the calculation of lectal distances based on subregiones/clusters within the semantic space defined by a concept's lexicalizations, it might instructive to look at lectal distances generated without any regard for the semantic structure of the lexemes involved. Lectal distances based on all retrieved tokens of the lexemes can then act as useful reference to which we can compare lectal distances obtained with more attention for the semantic reality behind those tokens.
 
 It is evident that these calculations are flawed, because we know for sure that they are flawed: there has been no correction or selection of the tokens whatsoever. Although they have a rather limited use for description, they can showcase how the applying the different filters (significance based on LLR, based on Fisher's Exact Test, based on power) yield different outcomes, and how the real analyses will/might look like. 
