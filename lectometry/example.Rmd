@@ -6,10 +6,10 @@ output:
   rmdformats::readthedown:
     highlight: kate
     number_sections: true
-    css: ./sources/styles.css
+    css: ./styles.css
     md_extensions: +bracketed_spans
-bibliography: ./sources/bibliography.bib
-csl: ./sources/apa.csl
+# bibliography: ./bibliography.bib
+csl: ./apa.csl
 
 ---
 
@@ -24,8 +24,23 @@ library(tidyverse)
 library(pander)
 library(DT)
 
-d.clust <- read.csv("C://Users/u0102617/Box/Rmarkdown/concepts-measures-withclusters.txt", header=T, sep=" ", check.names = F)
-d.noclust <- read.csv("C://Users/u0102617/Box/Rmarkdown/concepts-measures-withoutclusters.txt", header=T, sep=" ", check.names = F)
+library(RcppCNPy)
+library(RColorBrewer)
+library(rjson)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(dendextend, quietly=T)
+library(reshape2)
+library(dynamicTreeCut)
+library(entropy)
+library(AMR)
+library(pwr)
+
+WORKFOLDER <- "C:/Users/u0102617/Box/GitHub/StefanoDePascale.github.io/lectometry"
+
+d.clust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withclusters.txt"), header=T, sep=" ", check.names = F)
+d.noclust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withclusters.txt"), header=T, sep=" ", check.names = F)
 
 ```
 # Weighting strategies for lectometric analyses
@@ -83,8 +98,6 @@ It is indeed possible to observe a significant difference in profiles between re
 
 ## Baseline scenario: lectal distances without semantic control
 
-something to do
-
 Before we venture in the calculation of lectal distances based on subregiones/clusters within the semantic space defined by a concept's lexicalizations, it might instructive to look at lectal distances generated without any regard for the semantic structure of the lexemes involved. Lectal distances based on all retrieved tokens of the lexemes can then act as useful reference to which we can compare lectal distances obtained with more attention for the semantic reality behind those tokens.
 
 It is evident that these calculations are flawed, because we know for sure that they are flawed: there has been no correction or selection of the tokens whatsoever. Although they have a rather limited use for description, they can showcase how the applying the different filters (significance based on LLR, based on Fisher's Exact Test, based on power) yield different outcomes, and how the real analyses will/might look like. 
@@ -128,7 +141,7 @@ datatable(d.concept, rownames=FALSE, container = sketch, filter="top") %>%
 
 ```
 
-The main finding resulting from the table above is that for the vast majority of concepts (36 out of 42 to be precise), the application of filters does not affect the lectal distances. For almost all concepts the hypothesis tests, be it LLR or Fisher's Exact test, report significantly different distributions; therefore most City Block distances are kept. The concepts for which te tests cannot reject the null hypothesis of no lectal difference, and thus receive a distance of 0, are <span style="text-transform: lowercase; font-variant: small-caps;">[nuclear reactor](#nuclearreactor), [suspicion](#suspicion) and [religion](#religion)</span>. As these are all concepts that report the lowest lectal distances in the dataset, 
+The main finding resulting from the table above is that for the vast majority of concepts (36 out of 42 to be precise), the application of filters does not affect the lectal distances. For almost all concepts the hypothesis tests, be it LLR or Fisher's Exact test, report significantly different distributions; therefore most City Block distances are kept. The concepts for which the tests cannot reject the null hypothesis of no lectal difference, and thus receive a distance of 0, are <span style="text-transform: lowercase; font-variant: small-caps;">[nuclear reactor](#nuclearreactor), [suspicion](#suspicion) and [religion](#religion)</span>. As these are all concepts that report the lowest lectal distances in the dataset, 
 
 
 
@@ -181,61 +194,104 @@ kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape
   column_spec(c(1:7), extra_css = "vertical-align:middle;")
 ```
 
-# Stability analyses
+```{r, echo=FALSE, warning=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
 
-# A note on weighting and clusters
+conceptName = 'safety_belt'
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
 
-Why would we want to treat clusters differently? What is the logic behind weighting of clusters? Treating clusters differently in the calculation of uniformity measures across lects could be relevant for two reasons: because some clusters are conceptually more peripheral to the concept, or because the onomasiological profiles for different clusters are different. This note only explores the second case.
+path2dir = file.path(WORKFOLDER,conceptName)
+tsvfile = paste0(path2dir,'.tsne.tsv')
 
-The recognition that the onomasiological profiles for different clusters may be different leads to a fairly straightforward way of treating the clusters, a procedure that is fully parallel with the treatment of entire concepts in the original 1999 method. To recall, the 1999 approach involves,
+# open and store dataframe
+d.tsv <- read.csv(tsvfile, header=T, sep="\t", quote="", check.names = F)
 
-* first, to establish whether the lectal profiles for a given concept are significantly different,
-* second, to include such differences in the aggregate calculation over concepts when they are significant, and to include the nonsignificant cases as exhibiting 100% uniformity (this means, in other words, that the significance test is precisely that: a test of the hypothesis that the observed differences represent ‘real’ differences),
-* third, when aggregating over different concepts, to give a different weight to the uniformity measure of given concept on the basis of its relative frequency.
+# insert line breaks every 40 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{40,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>", "<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove 'small font' tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
 
-Applying this procedure to clusters within a concept would mean the following:
+rownames(d.tsv) <- d.tsv$`_id`
 
-* first, to establish whether the cluster-based lexical profiles of a given concept are significantly different;
-* second, to treat non-significant clusters as exhibiting hundred percent uniformity and to treat significantly different clusters as exhibiting ‘real’ differences;
-* third, to aggregate over the uniformity measures of different clusters weighted by the relative frequency of clusters.
+if (clustering == TRUE) {
+rows_matrices <- list()
+d <- npyLoad(paste0(path2dir,suffix,".ttmx.npy"))
+tokenids <- fromJSON(file = paste0(path2dir,suffix,".ttmx.meta"))
+colnames(d) <- tokenids$row_items
+rownames(d) <- tokenids$row_items
 
-Two further questions arise.
+dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
 
-First, do we still need aggregation over concepts when we aggregate over clusters first? Not necessarily, but proceeding directly to an aggregation over all clusters of all concepts is only admissable when the relative frequency of clusters that is used as a weighting measure is calculated on the entire database and not just within the concept. Also, since we would still be interested in the uniformity measures for different concepts as such, not much would be gained by abandoning a two-step procedure (in which we work with relative frequencies within a concept first and next proceed with the relative frequency of the concept).
+hcl <- hclust(as.dist(dst), method="ward.D2")
+dend <- as.dendrogram(hcl)
 
-Second, what are the relevant variants to this procedure? The weighting of clusters, like the weighting of concepts in the original 1999 procedure, is based on the reasoning that contexts that are communicatively less important should play a lesser role in aggregate calculations of uniformity. In terms of concepts, the logic is as follows. In the form of onomasiological profiles for concept x in lects A and B, we know the probability that an A-lecter and a B-lecter would be using the same terms when talking about x. Next, when aggregating over x and y, we take into account that the probability that they might talk about x is lower than the probability they might talk about y. That probability is a combination of the inclination of an A-lecter to talk about x and the inclination of a B-lecter to talk about x. In this perspective, it doesn’t matter all that much that these inclinations might differ: what we’re interested in is the overall communicative incidence of talk about x compared to talk about y.
+if (dynamic_method == TRUE) {
+  clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+  
+  clusters <- clusters[order.dendrogram(dend)]
+  clusters_numbers <- unique(clusters) - (0 %in% clusters)
+  n_clusters <- length(clusters_numbers)
+  
+  clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+  
+  variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+  lect_types <- c("BE-Du", "NL-Du")
+} else {
+  clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+}
 
-Still, when the relative frequencies of x in A and B differ, an asymmetric approach may be considered, in which the weighting of concepts is based on their frequency distribution in A alone or in B alone. The intended construct could then be paraphrased as: ‘If we pretend that B-lecters talk about x (and y and z etc.) as frequently as A-lecters, how would that affect the overall uniformity between A and B (and conversely from the point of view of B)?’. The extrapolation from concepts to clusters is straightforward.
+d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
 
-It is not immediately obvious how to interpret such a perspective (and accordingly evaluate its relevance), but one way of doing this would be to think about it in terms of ‘culture’. If culture (or at least ‘communicative culture, culture as discourse’) is defined in terms of the relative importance with which certain topics are discussed, an asymmetric weighting of concepts is a way of examining the effect of culture on linguistic uniformity: if the two lects had the same ‘culture’, either the A one or the B one, how would that influence the uniformity measures?
+# rownames(d.tsv) <- d.tsv$`_id`
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`1`$Belgium$tokens,"cluster"] <- "1"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`2`$Belgium$tokens,"cluster"] <- "2"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`3`$Belgium$tokens,"cluster"] <- "3"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`4`$Belgium$tokens,"cluster"] <- "4"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`5`$Belgium$tokens,"cluster"] <- "5"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`1`$Netherlands$tokens,"cluster"] <- "1"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`2`$Netherlands$tokens,"cluster"] <- "2"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`3`$Netherlands$tokens,"cluster"] <- "3"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`4`$Netherlands$tokens,"cluster"] <- "4"
+# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`5`$Netherlands$tokens,"cluster"] <- "5"
 
-However, as so often with the measures we develop, the relevance of such a cultural perspective may be more diachronic than synchronic. While the ‘what if’ perspective is a little bit academic for synchronic data, for diachronic data, it would be downright relevant to examine whether an observed convergence or divergence of uniformity is influenced by a ‘cultural’ change in the relative frequencies of the concepts in the various lects (or in other words, whether it correlates with a convergence or divergence of the lectal communicative habits and preferences).
-
-So, 
-
-1. it is best to treat clusters according to the procedure for concepts, following the 1999 approach; 
-2. a two-step approach (a weighted aggregation over clusters within concepts followed by a weighted aggregation over concepts) may be maintained; 
-3. rather than transforming lectally asymmetric concept frequencies into synchronic weighting factors, a more insightful way of using them would be to include them in the analysis of diachronic processes of convergence and divergence.
-
-At the same time, further thought may be given to the possibility of weighting clusters on the basis of their structural position within the concept.
+}
 
 
-Weighting and semantic lectometry  
+# create a two-dimensional plot (similar to the Shiny-based plot), but this time
+# with only the plotly package (ans specifically the ggplotly-function)
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+set.seed(2000); shape_manual <- sample(c(3,2,16), length(levels(d.tsv$lemma)))
+set.seed(2000); color_manual <- sample(c('red','green','blue'), length(levels(d.tsv$country)))
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+nb.cols <- length(levels(d.tsv$cluster))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
 
-```{r cars}
-summary(cars)
+
+p <- ggplot(d.tsv, aes(model.x,model.y)) +
+  geom_point(aes(colour=cluster, shape=lemma, text=paste('<b>Country</b>: ', d.tsv$country,
+                                                           '</br><b>Word</b>: ', d.tsv$lemma,
+                                                           '</br><b>Context</b>: ', d.tsv$text,
+                                                           '</br><b>Token</b>: ', d.tsv$`_id`))) +
+  # scale_color_manual(values=color_manual) +
+  scale_color_manual(values = mycolors) + 
+  scale_shape_manual(values=shape_manual) +
+  theme_bw() 
+
+q <- ggplotly(p, tooltip = 'text', opacity=0.5)
+q %>% layout(hoverlabel = list(bgcolor=c("rgb(255,255,204")),
+                   xaxis = list(scaleanchor = "y", scaleratio = 1),
+                   dragmode =  "select")
 ```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

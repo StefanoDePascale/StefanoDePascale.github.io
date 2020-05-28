@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css?family=Old+Standard+TT|IM+Fell+DW+Pica');
+
+/* From https://gist.github.com/jennybc/e9e9aba6ba18c72cec26#file-2015-03-02_plot-next-to-table-rmd */
+.twoC {width: 100%}
+.clearer {clear: both}
+.twoC .table-wrapper {width: 50%; float: right}
+.twoC .plotly {max-width: 50%; height:300px; float: left}
+
+/* My edit to examples */
+
+#main {
+  counter-reset: examples;
+}
+
+ol.example {
+  font-family: "Palatino Linotype", "Book Antigua", Palatino, Serif;
+  list-style: decimal;
+}
+
+ol.example li {
+  margin-bottom: 20px;
+  counter-increment: examples; 
+}
+
+ol.example li::marker {
+  content: "(" counter(examples) ")\a0";
+}
+
+.translation {
+  font-family: "IM Fell DW Pica";
+}
+
+.target {
+  font-weight: bold;
+  color: #118211;
+}
+
+.intable li {
+  font-size: 12.6px;
+  
+}
+
+intable {
+  margin-bottom: 0px !important;
+}
+
+.infobox {
+  padding: 1em 1em 1em 1em;
+  margin-bottom: 10px;
+  margin-left: 10px;
+  border: 2px solid #6699FF;
+  border-radius: 10px;
+  background: #f5f5f5 5px center/3em no-repeat;
+  width: 30%;
+  float: right;
+  font-size: 10px;
+  text-align: justify;
+}
+
+span.reference {
+  padding: 1px 2px 1px 2px;
+  border: 0.5px solid #6699FF;
+  border-radius: 5px;
+  background: white;
+}
+
+/* Everything greeeen */
+#main .nav-pills > li.active > a,
+#main .nav-pills > li.active > a:hover,
+#main .nav-pills > li.active > a:focus {
+   background-color: #22983B;
+}
+
+#main .nav-pills > li > a:hover {
+  background-color: #6699FF; /* 22983B*/
+}
+
+h1,h2,h3,h4,h5,h6,legend{
+    color: #6699FF; /* 22983B*/
+}
+
+#nav-top glyphicon {
+  color: #6699FF; /* 22983B*/
+}
+
+/*#table-of-contents header{
+    color:#22983B;
+}*/
+
+#sidebar h2 {
+    background-color:#6699FF; /* 22983B*/
+}
+
+#main a {
+  background-image: linear-gradient(180deg,#6699FF,#6699FF); /* 59b300*/
+    color:#6699FF;
+}
+
+a:hover{
+    color: #ffffff;
+    background-color:#6699FF;
+    background-image:none;
+}
+
+a:visited{
+    color:#6699FF
+}
+
+#content {
+  max-width:1000px;
+}
