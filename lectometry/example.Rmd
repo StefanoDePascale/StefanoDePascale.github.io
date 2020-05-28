@@ -13,6 +13,11 @@ csl: ./apa.csl
 
 ---
 
+<!-- <style> -->
+<!-- body { -->
+<!-- text-align: justify} -->
+<!-- </style> -->
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tippy)
@@ -40,7 +45,7 @@ library(pwr)
 WORKFOLDER <- "C:/Users/u0102617/Box/GitHub/StefanoDePascale.github.io/lectometry"
 
 d.clust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withclusters.txt"), header=T, sep=" ", check.names = F)
-d.noclust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withclusters.txt"), header=T, sep=" ", check.names = F)
+d.noclust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withoutclusters.txt"), header=T, sep=" ", check.names = F)
 
 ```
 # Weighting strategies for lectometric analyses
@@ -88,7 +93,7 @@ Two statistical tests are going to be used in this respect: the **Log Likelihood
 
 The weakness of this approach is that statistical significance can be manipulated by simply increasing the sample size of one or both onomasiological profiles in the comparison. Being dependent on sample size, the test will exaggerate the weight of frequent concepts, regardless of the lectal distance (in other words, the effect size) and downplay the weight of infrequent concepts (this criticism was already raised by <span class="reference">Ruette (2012: 93)</span>. 
 
-To overcome this weakness, we can rely on **statistical power as an (additional) filter mechanism**. The statistical power of one of the binary hypothesis tests introduced above indicates, loosely speaking, the confidence we have that with the available data we are able to find a 'real' difference between profiles, given the presence of such a 'real' difference (i.e given that we have rejected the null hypothesis and accepted the alternative hypothesis). The power of a test is directly related to the type II-error probability β. The β-level of a test indicates the probability (we can tolerate) of falsely rejecting the true alternative hypothesis, and accepting the false null hypothesis. The corresponding statistical power of a test is 1 − β, and ranges from 0 to 1. Keeping the type II-error probability low means increasing the power of a study. Just as with the significance level α (which is the probability we can tolerate of falsely rejecting the true null hypothesis and accepting the false alternative hypothesis, that is, a the Type I-error), a threshold can be chosen in advance by the researcher, and the minimal power of a test this is usually set to 0.80. The computation of the statistical power depends on a combination of the significance level (α-level), the sample size and the effect size (i.e. the lectal distance). 
+To overcome this weakness, we can rely on **statistical power as an (additional) filter mechanism**. The statistical power of one of the binary hypothesis tests introduced above indicates, loosely speaking, the confidence we have that with the available data we are able to find a 'real' difference between profiles, given the presence of such a 'real' difference (i.e given that we have rejected the null hypothesis and accepted the alternative hypothesis). The power of a test is directly related to the type II-error probability β. The β-level of a test indicates the probability (we can tolerate) of falsely rejecting the true alternative hypothesis, and accepting the false null hypothesis. The corresponding statistical power of a test is 1 − β, and ranges from 0 to 1. Keeping the type II-error probability low means increasing the power of a study. Just as with the significance level α (which is the probability we can tolerate of falsely rejecting the true null hypothesis and accepting the false alternative hypothesis, that is, a the Type I-error), a threshold can be chosen in advance by the researcher, and the minimal power of a test this is usually set to 0.80. The computation of the statistical power depends on a combination of the significance level (α-level), the sample size (i.e. the total frequency of the compared profiles) and the effect size (i.e. the lectal distance, quantified as Cramèr's V). 
 
 It is indeed possible to observe a significant difference in profiles between regiolects (where the p-value is lower than the significance level α), but that significance might be either due to the sample size (with the idea that the larger the sample size, the easier it will be to obtain a significant effect, regardless of the magnitude of the effect) or  to a genuine, true difference between the regiolects. A power analysis is often conducted prior to the hypothesis stest, in order to calculate the minimum sample size required for observing an effect of a given size. But power can be estimated even post-hoc after a test has been conducted. Using statistical power as a filter mechanism then boils down to a similar procedure as with statistical significance: if the 1 - β is lower than the 0.80, meaning there is insufficient power to accept the alternative hypothesis, the City Block distance is set to 0, no lectal distance, which corresponds to accepting the null hypothesis of no difference between the onomasiological profiles.
 
@@ -141,9 +146,11 @@ datatable(d.concept, rownames=FALSE, container = sketch, filter="top") %>%
 
 ```
 
-The main finding resulting from the table above is that for the vast majority of concepts (36 out of 42 to be precise), the application of filters does not affect the lectal distances. For almost all concepts the hypothesis tests, be it LLR or Fisher's Exact test, report significantly different distributions; therefore most City Block distances are kept. The concepts for which the tests cannot reject the null hypothesis of no lectal difference, and thus receive a distance of 0, are <span style="text-transform: lowercase; font-variant: small-caps;">[nuclear reactor](#nuclearreactor), [suspicion](#suspicion) and [religion](#religion)</span>. As these are all concepts that report the lowest lectal distances in the dataset, 
+The main finding resulting from the table above is that for the vast majority of concepts (36 out of 42 to be precise), the application of filters does not affect the lectal distances. For almost all concepts the hypothesis tests, be it LLR or Fisher's Exact test, report significantly different distributions; therefore most City Block distances are kept. The concepts for which the tests cannot reject the null hypothesis of no lectal difference, and thus receive a distance of 0, are <span style="text-transform: lowercase; font-variant: small-caps;">[nuclear reactor](#nuclearreactor), [suspicion](#suspicion) and [religion](#religion)</span>. As these are all concepts that with the lowest lectal distances in the dataset, we can assume that the null hypothesis of no lectal difference could not be rejected because effectively there does not seem to be a difference between the profiles. 
 
+The filter based on statistical power sets the distance of another three concepts to 0: <span style="text-transform: lowercase; font-variant: small-caps;">[pitch](#pitch), [retaliation](#retaliation) and [ecstasy](#ecstasy)</span>. These are the concepts with the next three lowest lectal distances in the database. It is important to note that the total concept frequency for all concepts is 1000, since we set a maximum threshold during their retrieval (justified by the purpose of the Frontiers in AI article). The third step in the lectometric procedure, that is, the relative weight of the concept, is therefore superfluous on this dataset in this case. Given the fixed values for the total sample size (i.e. 1000) and the significance level, the power of the test seems to depend solely on the effect size (i.e. Cramer's V). 
 
+It is surprising to see that the concept <span style="text-transform: lowercase; font-variant: small-caps;">[convict](#convict)</span> keeps his City Block distance after the power filter, even though this distance is lower than the lectal distance of <span style="text-transform: lowercase; font-variant: small-caps;">[ecstasy](#ecstasy)</span>. The Cramèr's V value is slightly higher (0.095 vs. 0.094), but is lower than that same value for<span style="text-transform: lowercase; font-variant: small-caps;">[retaliation](#retaliation)</span>. It is not very clear what is happening here!
 
 
 ## safety belt {#safetybelt}

@@ -12,6 +12,10 @@
   counter-reset: examples;
 }
 
+body {
+  text-align: justify;
+}
+
 ol.example {
   font-family: "Palatino Linotype", "Book Antigua", Palatino, Serif;
   list-style: decimal;
