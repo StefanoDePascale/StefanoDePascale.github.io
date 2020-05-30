@@ -2,6 +2,7 @@
 title: "Chapter 10: Lectal Lectometry"
 author: "Stefano De Pascale"
 date: "`r Sys.Date()`"
+runtime: shiny
 output:
   rmdformats::readthedown:
     highlight: kate
@@ -13,13 +14,9 @@ csl: ./apa.csl
 
 ---
 
-<!-- <style> -->
-<!-- body { -->
-<!-- text-align: justify} -->
-<!-- </style> -->
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(shiny)
 library(tippy)
 library(knitr)
 library(rmdformats)
@@ -41,6 +38,7 @@ library(dynamicTreeCut)
 library(entropy)
 library(AMR)
 library(pwr)
+library(shinydashboard)
 
 WORKFOLDER <- "C:/Users/u0102617/Box/GitHub/StefanoDePascale.github.io/lectometry"
 
@@ -201,15 +199,20 @@ kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape
   column_spec(c(1:7), extra_css = "vertical-align:middle;")
 ```
 
-```{r, echo=FALSE, warning=FALSE}
+<!-- ```{r, echo=FALSE, warning=FALSE}
+
 # change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
 
-conceptName = 'safety_belt'
+tryconcepts = c('repayment','safety_belt','appreciation')
+l <- htmltools::tagList()
+
+for (conceptName in tryconcepts) {
+# conceptName = "safety_belt"
 dynamic_method = FALSE
 clustering = TRUE
 suffix = ".freq3ppmi1"
 
-path2dir = file.path(WORKFOLDER,conceptName)
+path2dir = file.path(WORKFOLDER,conceptName,conceptName)
 tsvfile = paste0(path2dir,'.tsne.tsv')
 
 # open and store dataframe
@@ -262,18 +265,6 @@ if (dynamic_method == TRUE) {
 d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
 d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
 
-# rownames(d.tsv) <- d.tsv$`_id`
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`1`$Belgium$tokens,"cluster"] <- "1"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`2`$Belgium$tokens,"cluster"] <- "2"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`3`$Belgium$tokens,"cluster"] <- "3"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`4`$Belgium$tokens,"cluster"] <- "4"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`5`$Belgium$tokens,"cluster"] <- "5"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`1`$Netherlands$tokens,"cluster"] <- "1"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`2`$Netherlands$tokens,"cluster"] <- "2"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`3`$Netherlands$tokens,"cluster"] <- "3"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`4`$Netherlands$tokens,"cluster"] <- "4"
-# d.tsv[rownames(d.tsv) %in% json_data$safety_belt$`5`$Netherlands$tokens,"cluster"] <- "5"
-
 }
 
 
@@ -288,17 +279,287 @@ mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
 
 
 p <- ggplot(d.tsv, aes(model.x,model.y)) +
-  geom_point(aes(colour=cluster, shape=lemma, text=paste('<b>Country</b>: ', d.tsv$country,
+  geom_point(aes(colour=country, shape=lemma, text=paste('<b>Country</b>: ', d.tsv$country,
                                                            '</br><b>Word</b>: ', d.tsv$lemma,
                                                            '</br><b>Context</b>: ', d.tsv$text,
                                                            '</br><b>Token</b>: ', d.tsv$`_id`))) +
-  # scale_color_manual(values=color_manual) +
-  scale_color_manual(values = mycolors) + 
+  scale_color_manual(values=color_manual) +
+  # scale_color_manual(values = mycolors) + 
   scale_shape_manual(values=shape_manual) +
   theme_bw() 
 
-q <- ggplotly(p, tooltip = 'text', opacity=0.5)
-q %>% layout(hoverlabel = list(bgcolor=c("rgb(255,255,204")),
-                   xaxis = list(scaleanchor = "y", scaleratio = 1),
-                   dragmode =  "select")
+l[[conceptName]] <- ggplotly(p, tooltip = 'text', opacity=0.5) %>% 
+  layout(hoverlabel = list(bgcolor=c("rgb(255,255,204")),
+         xaxis = list(scaleanchor = "y", scaleratio = 1),
+         dragmode =  "select")
+
+}
+l
+
+# l <- htmltools::tagList()
+# for (i in 1:3) {
+#   l[[i]] <- plot_ly(x = rnorm(10))
+# }
+# l
+
+``` -->
+
+```{r echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+tryconcepts = c('repayment','safety_belt','appreciation')
+
+l <- htmltools::tagList()
+
+for (conceptName in tryconcepts) {
+  
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
+
+path2dir = file.path(WORKFOLDER,conceptName,conceptName)
+tsvfile = paste0(path2dir,'.tsne.tsv')
+
+# open and store dataframe
+d.tsv <- read.csv(tsvfile, header=T, sep="\t", quote="", check.names = F, encoding = "UTF-8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>", "<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove 'small font' tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+rows_matrices <- list()
+d <- npyLoad(paste0(path2dir,suffix,".ttmx.npy"))
+tokenids <- fromJSON(file = paste0(path2dir,suffix,".ttmx.meta"))
+colnames(d) <- tokenids$row_items
+rownames(d) <- tokenids$row_items
+
+dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+
+hcl <- hclust(as.dist(dst), method="ward.D2")
+dend <- as.dendrogram(hcl)
+
+if (dynamic_method == TRUE) {
+  clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+  
+  clusters <- clusters[order.dendrogram(dend)]
+  clusters_numbers <- unique(clusters) - (0 %in% clusters)
+  n_clusters <- length(clusters_numbers)
+  
+  clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+  
+  variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+  lect_types <- c("BE-Du", "NL-Du")
+} else {
+  clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+}
+
+d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+
+set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+set.seed(1990); color_manual <- sample(c('firebrick2','limegreen','royalblue2','grey30','gold'), length(levels(d.tsv$cluster)))
+
+}
+
+# the UI bit:
+ui <- fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = "color_coding",
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"))),
+            column(width=4, selectInput(inputId = "shape_coding",
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"))),
+          ),
+        fluidRow(
+          column(width=12,plotlyOutput("myplot"))
+        )
+    )
+  )
+
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+# the server bit:
+server <- function(input, output) {
+    output$myplot <- renderPlotly({
+      
+      p <- ggplot(d.tsv, aes(model.x,model.y)) +
+      geom_point(aes_string(colour=input$color_coding, 
+                            shape=input$shape_coding) +  
+                   aes(text=paste('<b>Country</b>: ', d.tsv$country,"|",
+                                  '<b>Word</b>: ', d.tsv$lemma,"|",
+                                  '<b>Newspaper</b>: ', d.tsv$newspaper,
+                                  '</br><b>Token</b>: ', d.tsv$`_id`,
+                                  '</br></br><b>Context</b>: ', d.tsv$text
+                                  ))
+                 
+                        ) +
+  scale_color_manual(values=color_manual) +
+  scale_shape_manual(values = shape_manual) +
+      theme_bw() 
+      
+      ggplotly(p, tooltip = "text", opacity=0.5) %>%
+        layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                          xaxis = list(scaleanchor = "y", scaleratio = 1),
+                          dragmode =  "select")
+    })
+}
+
+# Run it 
+l[[conceptName]] <- shinyApp(ui = ui, server = server, options = list(width = 2000, height=500))
+
+}
+l
+
+
 ```
+
+<!-- ```{r echo=FALSE}
+
+plot_overlay_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    plotOutput(ns("my_plot"), 
+               width = "100%")
+  )
+}
+# -------------------------------------------------------------------------
+
+plot_overlay_server <- function(input,
+                                output,
+                                session, 
+                                spec,
+                                plot_name) {
+  
+  output$my_plot <- renderPlot({
+    
+    plot(spec, 
+         main = plot_name)
+    
+  })
+}
+# -------------------------------------------------------------------------
+
+ui <- fluidPage(
+  titlePanel("Reprex"),
+  sidebarLayout(
+    sidebarPanel(
+      checkboxGroupInput("selected_sample",
+                         label = "Select Column",
+                         choices = seq_along(mtcars))
+    ),
+    mainPanel(
+      uiOutput("multi_plot_ui")
+    )
+  )
+)
+# -------------------------------------------------------------------------
+
+server <- function(input, output) {
+  
+  plot_data <- reactive({
+    col_select <- as.integer(input$selected_sample)
+    lapply(col_select, function(x) mtcars[,x])
+  })
+  
+  observeEvent(input$selected_sample, {
+    req(!is.null(input$selected_sample))
+    req(plot_data())
+    
+    output$multi_plot_ui <- renderUI({
+      
+      lapply(seq_along(input$selected_sample),
+             function(n) {
+               return(plot_overlay_ui(paste0("n", n)))
+             })
+    })
+    
+    lapply(seq_along(input$selected_sample),
+           function(i){
+             callModule(plot_overlay_server,
+                        paste0("n", i),
+                        spec = plot_data()[[i]],
+                        plot_name = i)
+           }
+    )
+  })
+}
+
+shinyApp(ui = ui, server = server)
+``` -->
+
+<!-- ```{r echo=FALSE}
+
+max_plots <- 5
+
+server <- function(input, output) {
+
+  # Insert the right number of plot output objects into the web page
+  output$plots <- renderUI({
+    plot_output_list <- lapply(1:input$n, function(i) {
+      plotname <- paste("plot", i, sep="")
+      plotOutput(plotname, height = 280, width = 250)
+    })
+
+    # Convert the list to a tagList - this is necessary for the list of items
+    # to display properly.
+    do.call(tagList, plot_output_list)
+  })
+
+  # Call renderPlot for each one. Plots are only actually generated when they
+  # are visible on the web page.
+  for (i in 1:max_plots) {
+    # Need local so that each item gets its own number. Without it, the value
+    # of i in the renderPlot() will be the same across all instances, because
+    # of when the expression is evaluated.
+    local({
+      my_i <- i
+      plotname <- paste("plot", my_i, sep="")
+
+      output[[plotname]] <- renderPlot({
+        plot(1:my_i, 1:my_i,
+             xlim = c(1, max_plots),
+             ylim = c(1, max_plots),
+             main = paste("1:", my_i, ".  n is ", input$n, sep = "")
+        )
+      })
+    })
+  }
+}
+
+ui <- pageWithSidebar(
+
+  headerPanel("Dynamic number of plots"),
+
+  sidebarPanel(
+    sliderInput("n", "Number of plots", value=1, min=1, max=5)
+  ),
+
+  mainPanel(
+    # This is the dynamic UI for the plots
+    uiOutput("plots")
+  )
+)
+
+shinyApp(ui = ui, server = server)
+
+``` -->
+
+Some other text to show here
