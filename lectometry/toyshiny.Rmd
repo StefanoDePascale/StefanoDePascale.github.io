@@ -1,0 +1,227 @@
+---
+title: "Untitled"
+author: "Stefano De Pascale"
+date: "30-5-2020"
+output:
+  rmdformats::readthedown:
+    css: ./styles.css
+    highlight: kate
+    md_extensions: +bracketed_spans
+    number_sections: yes
+csl: ./apa.csl
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(shiny)
+library(tippy)
+library(knitr)
+library(rmdformats)
+library(kfigr)
+library(kableExtra)
+library(tidyverse)
+library(pander)
+library(DT)
+
+library(RcppCNPy)
+library(RColorBrewer)
+library(rjson)
+library(ggplot2)
+library(plotly)
+library(dendextend, quietly=T)
+library(reshape2)
+library(dynamicTreeCut)
+library(entropy)
+library(AMR)
+library(pwr)
+library(shinydashboard)
+
+WORKFOLDER <- "C:/Users/u0102617/Box/GitHub/StefanoDePascale.github.io/lectometry"
+
+d.clust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withclusters.txt"), header=T, sep=" ", check.names = F)
+d.noclust <- read.csv(file.path(WORKFOLDER,"concepts-measures-withoutclusters.txt"), header=T, sep=" ", check.names = F)
+
+conceptName = "safety_belt"
+
+d.tsv <- read.csv(file.path(WORKFOLDER,conceptName,"safety_belt.tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding = "UTF-8")
+
+```
+
+This R Markdown document is made interactive using Shiny. Unlike the more traditional workflow of creating static reports, you can now create documents that allow your readers to change the assumptions underlying your analysis and see the results immediately. 
+
+To learn more, see [Interactive Documents](http://rmarkdown.rstudio.com/authoring_shiny.html).
+
+## Inputs and Outputs
+
+You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change.  This demonstrates how a standard R plot can be made interactive by wrapping it in the Shiny `renderPlot` function. The `selectInput` and `sliderInput` functions create the input widgets used to drive the plot.
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  selectInput("n_breaks", label = "Number of bins:",
+              choices = c(10, 20, 35, 50), selected = 20),
+  
+  sliderInput("bw_adjust", label = "Bandwidth adjustment:",
+              min = 0.2, max = 2, value = 1, step = 0.2)
+)
+
+renderPlot({
+  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
+       xlab = "Duration (minutes)", main = "Geyser eruption duration")
+  
+  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
+  lines(dens, col = "blue")
+})
+```
+
+## Embedded Application
+
+It's also possible to embed an entire Shiny application within an R Markdown document using the `shinyAppDir` function. This example embeds a Shiny application located in another directory:
+
+```{r tabsets, echo=FALSE}
+shinyAppDir(
+  system.file("examples/06_tabsets", package = "shiny"),
+  options = list(
+    width = "100%", height = 550
+  )
+)
+```
+
+Note the use of the `height` parameter to determine how much vertical space the embedded application should occupy.
+
+You can also use the `shinyApp` function to define an application inline rather then in an external directory.
+
+In all of R code chunks above the `echo = FALSE` attribute is used. This is to prevent the R code within the chunk from rendering in the document alongside the Shiny components.
+
+```{r echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+# tryconcepts = c('repayment','safety_belt','appreciation')
+# 
+# l <- htmltools::tagList()
+# 
+# for (conceptName in tryconcepts) {
+
+# conceptName = "safety_belt"
+# 
+# dynamic_method = FALSE
+# clustering = TRUE
+# suffix = ".freq3ppmi1"
+# 
+# path2dir = file.path(WORKFOLDER,conceptName,conceptName)
+# tsvfile = paste0(path2dir,'.tsne.tsv')
+# 
+# # open and store dataframe
+# d.tsv <- read.csv(tsvfile, header=T, sep="\t", quote="", check.names = F, encoding = "UTF-8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>", "<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove 'small font' tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+rows_matrices <- list()
+d <- npyLoad(paste0(path2dir,suffix,".ttmx.npy"))
+tokenids <- fromJSON(file = paste0(path2dir,suffix,".ttmx.meta"))
+colnames(d) <- tokenids$row_items
+rownames(d) <- tokenids$row_items
+
+dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+
+hcl <- hclust(as.dist(dst), method="ward.D2")
+dend <- as.dendrogram(hcl)
+
+if (dynamic_method == TRUE) {
+  clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+  
+  clusters <- clusters[order.dendrogram(dend)]
+  clusters_numbers <- unique(clusters) - (0 %in% clusters)
+  n_clusters <- length(clusters_numbers)
+  
+  clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+  
+  variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+  lect_types <- c("BE-Du", "NL-Du")
+} else {
+  clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+}
+
+d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+
+set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+set.seed(1990); color_manual <- sample(c('firebrick2','limegreen','royalblue2','grey30','gold'), length(levels(d.tsv$cluster)))
+
+}
+
+# the UI bit:
+ui <- fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = "color_coding",
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"))),
+            column(width=4, selectInput(inputId = "shape_coding",
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"))),
+          ),
+        fluidRow(
+          column(width=12,plotlyOutput("myplot"))
+        )
+    )
+  )
+
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+# the server bit:
+server <- function(input, output) {
+    output$myplot <- renderPlotly({
+      
+      p <- ggplot(d.tsv, aes(model.x,model.y)) +
+      geom_point(aes_string(colour=input$color_coding, 
+                            shape=input$shape_coding) +  
+                   aes(text=paste('<b>Country</b>: ', d.tsv$country,"|",
+                                  '<b>Word</b>: ', d.tsv$lemma,"|",
+                                  '<b>Newspaper</b>: ', d.tsv$newspaper,
+                                  '</br><b>Token</b>: ', d.tsv$`_id`,
+                                  '</br></br><b>Context</b>: ', d.tsv$text
+                                  ))
+                 
+                        ) +
+  scale_color_manual(values = color_manual) +
+  scale_shape_manual(values = shape_manual) +
+      theme_bw() 
+      
+      ggplotly(p, tooltip = "text", opacity=0.5) %>%
+        layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                          xaxis = list(scaleanchor = "y", scaleratio = 1),
+                          dragmode =  "select")
+    })
+}
+
+# Run it 
+# l[[conceptName]] <- shinyApp(ui = ui, server = server, options = list(width = 2000, height=500))
+
+
+
+# }
+# l
+
+shinyApp(ui = ui, server = server, options = list(width = 1600, height=500))
+
+
+```

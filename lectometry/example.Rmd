@@ -1,18 +1,39 @@
 ---
-title: "Chapter 10: Lectal Lectometry"
+title: 'Chapter 10: Lectal Lectometry'
 author: "Stefano De Pascale"
 date: "`r Sys.Date()`"
-runtime: shiny
 output:
   rmdformats::readthedown:
-    highlight: kate
-    number_sections: true
     css: ./styles.css
+    highlight: kate
     md_extensions: +bracketed_spans
-# bibliography: ./bibliography.bib
+    number_sections: yes
+resource_files:
+- safety_belt/safety_belt.freq3ppmi1.ttmx.meta
+- safety_belt/safety_belt.freq3ppmi1.ttmx.npy
+- safety_belt/safety_belt.tsne.tsv
+- repayment/repayment.tsne.tsv
+- repayment/repayment.freq3ppmi1.ttmx.npy
+- repayment/repayment.freq3ppmi1.ttmx.meta
+- appreciation/appreciation.freq3ppmi1.ttmx.meta
+- appreciation/appreciation.freq3ppmi1.ttmx.npy
+- appreciation/appreciation.tsne.tsv
+- dip/dip.freq3ppmi1.ttmx.meta
+- dip/dip.freq3ppmi1.ttmx.npy
+- dip/dip.tsne.tsv
+- keyboard/keyboard.freq3ppmi1.ttmx.meta
+- keyboard/keyboard.freq3ppmi1.ttmx.npy
+- keyboard/keyboard.tsne.tsv
+- chat/chat.freq3ppmi1.ttmx.meta
+- chat/chat.freq3ppmi1.ttmx.npy
+- chat/chat.tsne.tsv
+- opening_hours/opening_hours.freq3ppmi1.ttmx.meta
+- opening_hours/opening_hours.freq3ppmi1.ttmx.npy
+- opening_hours/opening_hours.tsne.tsv
+runtime: shiny
 csl: ./apa.csl
-
 ---
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -25,6 +46,7 @@ library(kableExtra)
 library(tidyverse)
 library(pander)
 library(DT)
+library(cluster)
 
 library(RcppCNPy)
 library(RColorBrewer)
@@ -179,6 +201,7 @@ for (cl in 1:5) {
     select(starts_with('var'))
   
   freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  freqs.m <- freqs.m[rowSums(is.na(freqs.m)) != ncol(freqs.m), ]
   
   variants <- as.character(freqs$variants)
   
@@ -198,136 +221,52 @@ kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape
   add_header_above(c("","","City Block"=4,"")) %>%
   column_spec(c(1:7), extra_css = "vertical-align:middle;")
 ```
-
-<!-- ```{r, echo=FALSE, warning=FALSE}
-
+```{r, safety_belt, echo=FALSE}
 # change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
 
-tryconcepts = c('repayment','safety_belt','appreciation')
-l <- htmltools::tagList()
+conceptName = "safety_belt"
 
-for (conceptName in tryconcepts) {
-# conceptName = "safety_belt"
+# the UI bit:
+fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
+                        label = "Color coding:",
+                        choices = c("cluster","clusterpam","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("shape_coding_",conceptName),
+                        label = "Shape coding:",
+                        choices = c("cluster","clusterpam","lemma","country"),
+                        multiple = TRUE))
+          )
+        # fluidRow(
+        #     column(width=12,plotlyOutput("myplot"))
+        # )
+    )
+  )
+
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+# the server bit:
+renderPlotly({
+  
+  conceptName = "safety_belt"
+
 dynamic_method = FALSE
 clustering = TRUE
 suffix = ".freq3ppmi1"
-
-path2dir = file.path(WORKFOLDER,conceptName,conceptName)
-tsvfile = paste0(path2dir,'.tsne.tsv')
-
+ 
 # open and store dataframe
-d.tsv <- read.csv(tsvfile, header=T, sep="\t", quote="", check.names = F)
 
-# insert line breaks every 40 characters in the concordance of a token
-# (in order to avoid long stretches of text in the visualization)
-d.tsv$`_ctxt.model` <- gsub("(.{40,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
-# target token in bold face
-d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>", "<b>\\2</b>", d.tsv$`_ctxt.model`)
-# significant context words in italics
-d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
-# remove 'small font' tags for context words outside of context window
-d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
-d.tsv$text <- d.tsv$`_ctxt.model`
-
-rownames(d.tsv) <- d.tsv$`_id`
-
-if (clustering == TRUE) {
-rows_matrices <- list()
-d <- npyLoad(paste0(path2dir,suffix,".ttmx.npy"))
-tokenids <- fromJSON(file = paste0(path2dir,suffix,".ttmx.meta"))
-colnames(d) <- tokenids$row_items
-rownames(d) <- tokenids$row_items
-
-dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
-
-hcl <- hclust(as.dist(dst), method="ward.D2")
-dend <- as.dendrogram(hcl)
-
-if (dynamic_method == TRUE) {
-  clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
-  
-  clusters <- clusters[order.dendrogram(dend)]
-  clusters_numbers <- unique(clusters) - (0 %in% clusters)
-  n_clusters <- length(clusters_numbers)
-  
-  clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
-  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
-  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
-  
-  variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
-  lect_types <- c("BE-Du", "NL-Du")
-} else {
-  clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
-  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
-  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
-}
-
-d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
-d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
-
-}
-
-
-# create a two-dimensional plot (similar to the Shiny-based plot), but this time
-# with only the plotly package (ans specifically the ggplotly-function)
-
-set.seed(2000); shape_manual <- sample(c(3,2,16), length(levels(d.tsv$lemma)))
-set.seed(2000); color_manual <- sample(c('red','green','blue'), length(levels(d.tsv$country)))
-
-nb.cols <- length(levels(d.tsv$cluster))
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
-
-
-p <- ggplot(d.tsv, aes(model.x,model.y)) +
-  geom_point(aes(colour=country, shape=lemma, text=paste('<b>Country</b>: ', d.tsv$country,
-                                                           '</br><b>Word</b>: ', d.tsv$lemma,
-                                                           '</br><b>Context</b>: ', d.tsv$text,
-                                                           '</br><b>Token</b>: ', d.tsv$`_id`))) +
-  scale_color_manual(values=color_manual) +
-  # scale_color_manual(values = mycolors) + 
-  scale_shape_manual(values=shape_manual) +
-  theme_bw() 
-
-l[[conceptName]] <- ggplotly(p, tooltip = 'text', opacity=0.5) %>% 
-  layout(hoverlabel = list(bgcolor=c("rgb(255,255,204")),
-         xaxis = list(scaleanchor = "y", scaleratio = 1),
-         dragmode =  "select")
-
-}
-l
-
-# l <- htmltools::tagList()
-# for (i in 1:3) {
-#   l[[i]] <- plot_ly(x = rnorm(10))
-# }
-# l
-
-``` -->
-
-```{r echo=FALSE}
-# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
-
-tryconcepts = c('repayment','safety_belt','appreciation')
-
-l <- htmltools::tagList()
-
-for (conceptName in tryconcepts) {
-  
-dynamic_method = FALSE
-clustering = TRUE
-suffix = ".freq3ppmi1"
-
-path2dir = file.path(WORKFOLDER,conceptName,conceptName)
-tsvfile = paste0(path2dir,'.tsne.tsv')
-
-# open and store dataframe
-d.tsv <- read.csv(tsvfile, header=T, sep="\t", quote="", check.names = F, encoding = "UTF-8")
+d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
 
 # target token in bold face
-d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>", "<b>\\2</b>", d.tsv$`_ctxt.model`)
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
 # significant context words in italics
 d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
-# remove 'small font' tags for context words outside of context window
+# remove "small font" tags for context words outside of context window
 d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
 # insert line breaks every 50 characters in the concordance of a token
 # (in order to avoid long stretches of text in the visualization)
@@ -337,58 +276,301 @@ d.tsv$text <- d.tsv$`_ctxt.model`
 rownames(d.tsv) <- d.tsv$`_id`
 
 if (clustering == TRUE) {
-rows_matrices <- list()
-d <- npyLoad(paste0(path2dir,suffix,".ttmx.npy"))
-tokenids <- fromJSON(file = paste0(path2dir,suffix,".ttmx.meta"))
-colnames(d) <- tokenids$row_items
-rownames(d) <- tokenids$row_items
-
-dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
-
-hcl <- hclust(as.dist(dst), method="ward.D2")
-dend <- as.dendrogram(hcl)
-
-if (dynamic_method == TRUE) {
-  clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+  rows_matrices <- list()
+  d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+  tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+  colnames(d) <- tokenids$row_items
+  rownames(d) <- tokenids$row_items
   
-  clusters <- clusters[order.dendrogram(dend)]
-  clusters_numbers <- unique(clusters) - (0 %in% clusters)
-  n_clusters <- length(clusters_numbers)
+  dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
   
-  clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
-  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
-  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+  hcl <- hclust(as.dist(dst), method="ward.D2")
+  dend <- as.dendrogram(hcl)
   
-  variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
-  lect_types <- c("BE-Du", "NL-Du")
-} else {
-  clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
-  clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
-  clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+  pamcl <- pam(dst, k=5)
+  
+  if (dynamic_method == TRUE) {
+    clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+    
+    clusters <- clusters[order.dendrogram(dend)]
+    clusters_numbers <- unique(clusters) - (0 %in% clusters)
+    n_clusters <- length(clusters_numbers)
+    
+    clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+    clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+    clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+    
+    variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+    lect_types <- c("BE-Du", "NL-Du")
+    
+    } else {
+      clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+      
+    }
+  
+  dpamcl <- data.frame(cluster=pamcl$clustering)
+  d.tsv$clusterpam <- dpamcl[rownames(d.tsv),"cluster"]
+  d.tsv$clusterpam <- as.factor(as.character(d.tsv$clusterpam))
+  
+  d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+  d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+
+  set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+  set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
+  }
+
+         p <- ggplot(d.tsv, aes(model.x,model.y)) +
+           geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                 shape=input[[paste0("shape_coding_",conceptName)]]) +  
+                        aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                       "<b>Word</b>: ", d.tsv$lemma,"|",
+                                       "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                       "</br><b>Token</b>: ", d.tsv$`_id`,
+                                       "</br></br><b>Context</b>: ", d.tsv$text
+                                       )
+                            )
+                      ) + 
+           scale_color_manual(values = color_manual) +
+           scale_shape_manual(values = shape_manual) +
+           theme_bw() 
+         
+         ggplotly(p, tooltip = "text", opacity=0.5) %>%
+           layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                  xaxis = list(scaleanchor = "y", scaleratio = 1),
+                  dragmode =  "select")
+         })
+
+```
+
+## repayment {#repayment}
+```{r, anchor = "Table", echo=FALSE}
+l <- "repayment"
+d.concept <- d.clust %>% 
+  filter(concept == l) %>%
+  select('cluster', 'distance_cityblock', 'filter.fisher','filter.llr','filter.power') %>%
+  mutate(distance_cityblock*filter.llr,
+         distance_cityblock*filter.fisher,
+         distance_cityblock*filter.power) %>%
+  select(-starts_with('filter'))
+
+d.concept$semantics <- c(
+"<i>aflossing</i> as ‘changing of the guard [mostly figurative]’ (<i>aflossing van de wacht</i>)",
+"<i>aflossing</i> as <span class='concept'>repayment</span>, more specifically in the context of government debts (<i>aflossing van de staatschuld</i>)",
+"<span class='concept'>repayment</span>, more specifically in the context of rivate debts, loans and mortgages (<i>aflossing/afbetaling van de schuld/lening/hypotheek</i>",
+"<i>aflossing</i> as ‘relay race’",
+"<ul class='intable'><li>‘installment/repayment’ (maandelijkse aflossingen/afbetalingen)</li>
+<li><i>afbetaling</i> as ‘on credit’ (<i>kopen op afbetaling</i>)</li></ul>"
+)
+
+tableList <- list()
+for (cl in 1:5) {
+  
+  freqs <- d.clust %>% 
+    filter(concept == l & cluster == cl) %>%
+    select(starts_with('var'))
+  
+  freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  freqs.m <- freqs.m[rowSums(is.na(freqs.m)) != ncol(freqs.m), ]
+  
+  variants <- as.character(freqs$variants)
+  
+  colnames(freqs.m) <- c("BE","NL")
+  rownames(freqs.m) <- str_split(variants,"/")[[1]]
+  
+  tableList[[cl]] <- kable(freqs.m)
 }
 
-d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
-d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+d.concept <- d.concept %>% add_column(table=tableList, .before="distance_cityblock")
 
-set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
-set.seed(1990); color_manual <- sample(c('firebrick2','limegreen','royalblue2','grey30','gold'), length(levels(d.tsv$cluster)))
 
-}
+colnames(d.concept) <- c("Cluster", "Contigency table", "No filter", "LLR filter", "Fisher filter","power filter","Semantics")
 
-# the UI bit:
-ui <- fluidPage(
+kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape = FALSE) %>% 
+  kable_styling(full_width = T) %>%
+  add_header_above(c("","","City Block"=4,"")) %>%
+  column_spec(c(1:7), extra_css = "vertical-align:middle;")
+```
+```{r, repayment, echo=FALSE}
+
+conceptName = "repayment"
+
+fluidPage(
         box(status = "primary", solidHeader = TRUE,
         fluidRow(width=4,
-            column(width=4, selectInput(inputId = "color_coding",
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
                         label = "Color coding:",
-                        choices = c("cluster","lemma","country"))),
-            column(width=4, selectInput(inputId = "shape_coding",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
                         label = "Shape coding:",
-                        choices = c("cluster","lemma","country"))),
-          ),
-        fluidRow(
-          column(width=12,plotlyOutput("myplot"))
-        )
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+          )
+    )
+  )
+
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+renderPlotly({
+  
+  conceptName = "repayment"
+
+  dynamic_method = FALSE
+  clustering = TRUE
+  suffix = ".freq3ppmi1"
+   
+  # open and store dataframe
+  
+  d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
+  
+  # target token in bold face
+  d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
+  # significant context words in italics
+  d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+  # remove "small font" tags for context words outside of context window
+  d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+  # insert line breaks every 50 characters in the concordance of a token
+  # (in order to avoid long stretches of text in the visualization)
+  d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+  d.tsv$text <- d.tsv$`_ctxt.model`
+  
+  rownames(d.tsv) <- d.tsv$`_id`
+  
+  if (clustering == TRUE) {
+    rows_matrices <- list()
+    d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+    tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+    colnames(d) <- tokenids$row_items
+    rownames(d) <- tokenids$row_items
+    
+    dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+    
+    hcl <- hclust(as.dist(dst), method="ward.D2")
+    dend <- as.dendrogram(hcl)
+    
+    if (dynamic_method == TRUE) {
+      clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+      
+      clusters <- clusters[order.dendrogram(dend)]
+      clusters_numbers <- unique(clusters) - (0 %in% clusters)
+      n_clusters <- length(clusters_numbers)
+      
+      clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+      
+      variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+      lect_types <- c("BE-Du", "NL-Du")
+      
+      } else {
+        clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+        clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+        clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+        
+        }
+    
+    d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+    d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+  
+    set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+    set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
+    }
+  
+           p <- ggplot(d.tsv, aes(model.x,model.y)) +
+             geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                   shape=input[[paste0("shape_coding_",conceptName)]]) +  
+                          aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                         "<b>Word</b>: ", d.tsv$lemma,"|",
+                                         "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                         "</br><b>Token</b>: ", d.tsv$`_id`,
+                                         "</br></br><b>Context</b>: ", d.tsv$text
+                                         )
+                              )
+                        ) + 
+             scale_color_manual(values = color_manual) +
+             scale_shape_manual(values = shape_manual) +
+             theme_bw() 
+           
+           ggplotly(p, tooltip = "text", opacity=0.5) %>%
+             layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                    xaxis = list(scaleanchor = "y", scaleratio = 1),
+                    dragmode =  "select")
+         })
+
+```
+
+## appreciation {#appreciation}
+```{r, anchor = "Table", echo=FALSE}
+
+l <- "appreciation"
+d.concept <- d.clust %>% 
+  filter(concept == l) %>%
+  select('cluster', 'distance_cityblock', 'filter.fisher','filter.llr','filter.power') %>%
+  mutate(distance_cityblock*filter.llr,
+         distance_cityblock*filter.fisher,
+         distance_cityblock*filter.power) %>%
+  select(-starts_with('filter'))
+
+d.concept$semantics <- c(
+"riem as 'oar/paddle', more in the idiom 'roeien met de riemen die men heeft'",
+"<ul class='intable'><li>riem as 'shoulder/waistbelt', more specifically in the idiom 'een hart onder de riem steken'</li><li>gordel as 'belt', more specifically in the idioms 'een slag/stoot onder de gordel'</li></ul>",
+"'safety belt'",
+"<ul class='intable'><li>gordel as 'waistbelt', often as 'judo/karate belt'</li><li>riem as 'waistbelt', often in fashion context (with leren)</li></ul>",
+"<ul class='intable'><li>gordel as 'encircling area' (e.g. groene gordel) and as 'safety belt'</li><li>riem as 'waistbelt', more specifically in the idiom 'de riem afleggen' and in fashion context</li></ul>")
+
+tableList <- list()
+for (cl in 1:5) {
+  
+  freqs <- d.clust %>% 
+    filter(concept == l & cluster == cl) %>%
+    select(starts_with('var'))
+  
+  freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  freqs.m <- freqs.m[rowSums(is.na(freqs.m)) != ncol(freqs.m), ]
+  
+  variants <- as.character(freqs$variants)
+  
+  colnames(freqs.m) <- c("BE","NL")
+  rownames(freqs.m) <- str_split(variants,"/")[[1]]
+  
+  tableList[[cl]] <- kable(freqs.m)
+}
+
+d.concept <- d.concept %>% add_column(table=tableList, .before="distance_cityblock")
+
+
+colnames(d.concept) <- c("Cluster", "Contigency table", "No filter", "LLR filter", "Fisher filter","power filter","Semantics")
+
+kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape = FALSE) %>% 
+  kable_styling(full_width = T) %>%
+  add_header_above(c("","","City Block"=4,"")) %>%
+  column_spec(c(1:7), extra_css = "vertical-align:middle;")
+```
+```{r, appreciation, echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+conceptName = "appreciation"
+
+# the UI bit:
+fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("shape_coding_",conceptName),
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+          )
+        # fluidRow(
+        #     column(width=12,plotlyOutput("myplot"))
+        # )
     )
   )
 
@@ -397,169 +579,748 @@ ui <- fluidPage(
 }
 
 # the server bit:
-server <- function(input, output) {
-    output$myplot <- renderPlotly({
+renderPlotly({
+  
+  conceptName = "appreciation"
+
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
+ 
+# open and store dataframe
+
+d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove "small font" tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+  rows_matrices <- list()
+  d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+  tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+  colnames(d) <- tokenids$row_items
+  rownames(d) <- tokenids$row_items
+  
+  dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+  
+  hcl <- hclust(as.dist(dst), method="ward.D2")
+  dend <- as.dendrogram(hcl)
+  
+  if (dynamic_method == TRUE) {
+    clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+    
+    clusters <- clusters[order.dendrogram(dend)]
+    clusters_numbers <- unique(clusters) - (0 %in% clusters)
+    n_clusters <- length(clusters_numbers)
+    
+    clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+    clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+    clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+    
+    variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+    lect_types <- c("BE-Du", "NL-Du")
+    
+    } else {
+      clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
       
-      p <- ggplot(d.tsv, aes(model.x,model.y)) +
-      geom_point(aes_string(colour=input$color_coding, 
-                            shape=input$shape_coding) +  
-                   aes(text=paste('<b>Country</b>: ', d.tsv$country,"|",
-                                  '<b>Word</b>: ', d.tsv$lemma,"|",
-                                  '<b>Newspaper</b>: ', d.tsv$newspaper,
-                                  '</br><b>Token</b>: ', d.tsv$`_id`,
-                                  '</br></br><b>Context</b>: ', d.tsv$text
-                                  ))
-                 
-                        ) +
-  scale_color_manual(values=color_manual) +
-  scale_shape_manual(values = shape_manual) +
-      theme_bw() 
-      
-      ggplotly(p, tooltip = "text", opacity=0.5) %>%
-        layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
-                          xaxis = list(scaleanchor = "y", scaleratio = 1),
-                          dragmode =  "select")
-    })
-}
+      }
+  
+  d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+  d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
 
-# Run it 
-l[[conceptName]] <- shinyApp(ui = ui, server = server, options = list(width = 2000, height=500))
+  set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+  set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
+  }
 
-}
-l
-
+         p <- ggplot(d.tsv, aes(model.x,model.y)) +
+           geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                 shape=input[[paste0("shape_coding_",conceptName)]]) + 
+                        aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                       "<b>Word</b>: ", d.tsv$lemma,"|",
+                                       "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                       "</br><b>Token</b>: ", d.tsv$`_id`,
+                                       "</br></br><b>Context</b>: ", d.tsv$text
+                                       )
+                            )
+                      ) + 
+           scale_color_manual(values = color_manual) +
+           scale_shape_manual(values = shape_manual) +
+           theme_bw() 
+         
+         ggplotly(p, tooltip = "text", opacity=0.5) %>%
+           layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                  xaxis = list(scaleanchor = "y", scaleratio = 1),
+                  dragmode =  "select")
+         })
 
 ```
 
-<!-- ```{r echo=FALSE}
+## keyboard {#keyboard}
+```{r, anchor = "Table", echo=FALSE}
 
-plot_overlay_ui <- function(id) {
-  ns <- NS(id)
-  tagList(
-    plotOutput(ns("my_plot"), 
-               width = "100%")
-  )
-}
-# -------------------------------------------------------------------------
+l <- "keyboard"
+d.concept <- d.clust %>% 
+  filter(concept == l) %>%
+  select('cluster', 'distance_cityblock', 'filter.fisher','filter.llr','filter.power') %>%
+  mutate(distance_cityblock*filter.llr,
+         distance_cityblock*filter.fisher,
+         distance_cityblock*filter.power) %>%
+  select(-starts_with('filter'))
 
-plot_overlay_server <- function(input,
-                                output,
-                                session, 
-                                spec,
-                                plot_name) {
+d.concept$semantics <- c(
+"‘key board for computers’ (significant cue: <i>muis</i>)",
+"‘key board, most often for computers’ (cues: <i>tokkelen, beeldscherm, computer</i>)",
+"shared cue: <i>toetsen</i><ul class='intable'><li><i>klavier</i> as ‘key board, for musical instruments’</li><li><i>toetsenbord</i> as ‘key board, most often for computers'</li><ul>",
+"shared cue: <i>achter, zitten</i><ul class='intable'><li><i>klavier</i> as ‘key board, for musical instruments’</li><li><i>toetsenbord</i> as ‘key board, most often for computers'</li><ul>",
+"cues: <i>vinger(s), letter(s)</i><ul class='intable'><li><i><i>klavier</i> as ‘key board, for musical instruments’</li><li><i>toetsenbord</i> as ‘key board, most often for computers'</li><ul>"
+)
+
+tableList <- list()
+for (cl in 1:5) {
   
-  output$my_plot <- renderPlot({
-    
-    plot(spec, 
-         main = plot_name)
-    
-  })
+  freqs <- d.clust %>% 
+    filter(concept == l & cluster == cl) %>%
+    select(starts_with('var'))
+  
+  freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  freqs.m <- freqs.m[rowSums(is.na(freqs.m)) != ncol(freqs.m), ]
+  
+  variants <- as.character(freqs$variants)
+  
+  colnames(freqs.m) <- c("BE","NL")
+  rownames(freqs.m) <- str_split(variants,"/")[[1]]
+  
+  tableList[[cl]] <- kable(freqs.m)
 }
-# -------------------------------------------------------------------------
 
-ui <- fluidPage(
-  titlePanel("Reprex"),
-  sidebarLayout(
-    sidebarPanel(
-      checkboxGroupInput("selected_sample",
-                         label = "Select Column",
-                         choices = seq_along(mtcars))
-    ),
-    mainPanel(
-      uiOutput("multi_plot_ui")
+d.concept <- d.concept %>% add_column(table=tableList, .before="distance_cityblock")
+
+
+colnames(d.concept) <- c("Cluster", "Contigency table", "No filter", "LLR filter", "Fisher filter","power filter","Semantics")
+
+kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape = FALSE) %>% 
+  kable_styling(full_width = T) %>%
+  add_header_above(c("","","City Block"=4,"")) %>%
+  column_spec(c(1:7), extra_css = "vertical-align:middle;")
+```
+```{r, keyboard, echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+conceptName = "keyboard"
+
+# the UI bit:
+fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("shape_coding_",conceptName),
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+          )
+        # fluidRow(
+        #     column(width=12,plotlyOutput("myplot"))
+        # )
     )
   )
-)
-# -------------------------------------------------------------------------
 
-server <- function(input, output) {
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+# the server bit:
+renderPlotly({
   
-  plot_data <- reactive({
-    col_select <- as.integer(input$selected_sample)
-    lapply(col_select, function(x) mtcars[,x])
-  })
+  conceptName = "keyboard"
+
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
+ 
+# open and store dataframe
+
+d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove "small font" tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+  rows_matrices <- list()
+  d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+  tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+  colnames(d) <- tokenids$row_items
+  rownames(d) <- tokenids$row_items
   
-  observeEvent(input$selected_sample, {
-    req(!is.null(input$selected_sample))
-    req(plot_data())
+  dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+  
+  hcl <- hclust(as.dist(dst), method="ward.D2")
+  dend <- as.dendrogram(hcl)
+  
+  if (dynamic_method == TRUE) {
+    clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
     
-    output$multi_plot_ui <- renderUI({
+    clusters <- clusters[order.dendrogram(dend)]
+    clusters_numbers <- unique(clusters) - (0 %in% clusters)
+    n_clusters <- length(clusters_numbers)
+    
+    clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+    clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+    clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+    
+    variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+    lect_types <- c("BE-Du", "NL-Du")
+    
+    } else {
+      clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
       
-      lapply(seq_along(input$selected_sample),
-             function(n) {
-               return(plot_overlay_ui(paste0("n", n)))
-             })
-    })
-    
-    lapply(seq_along(input$selected_sample),
-           function(i){
-             callModule(plot_overlay_server,
-                        paste0("n", i),
-                        spec = plot_data()[[i]],
-                        plot_name = i)
-           }
-    )
-  })
-}
+      }
+  
+  d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+  d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
 
-shinyApp(ui = ui, server = server)
-``` -->
-
-<!-- ```{r echo=FALSE}
-
-max_plots <- 5
-
-server <- function(input, output) {
-
-  # Insert the right number of plot output objects into the web page
-  output$plots <- renderUI({
-    plot_output_list <- lapply(1:input$n, function(i) {
-      plotname <- paste("plot", i, sep="")
-      plotOutput(plotname, height = 280, width = 250)
-    })
-
-    # Convert the list to a tagList - this is necessary for the list of items
-    # to display properly.
-    do.call(tagList, plot_output_list)
-  })
-
-  # Call renderPlot for each one. Plots are only actually generated when they
-  # are visible on the web page.
-  for (i in 1:max_plots) {
-    # Need local so that each item gets its own number. Without it, the value
-    # of i in the renderPlot() will be the same across all instances, because
-    # of when the expression is evaluated.
-    local({
-      my_i <- i
-      plotname <- paste("plot", my_i, sep="")
-
-      output[[plotname]] <- renderPlot({
-        plot(1:my_i, 1:my_i,
-             xlim = c(1, max_plots),
-             ylim = c(1, max_plots),
-             main = paste("1:", my_i, ".  n is ", input$n, sep = "")
-        )
-      })
-    })
+  set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+  set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
   }
+
+         p <- ggplot(d.tsv, aes(model.x,model.y)) +
+           geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                 shape=input[[paste0("shape_coding_",conceptName)]]) + 
+                        aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                       "<b>Word</b>: ", d.tsv$lemma,"|",
+                                       "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                       "</br><b>Token</b>: ", d.tsv$`_id`,
+                                       "</br></br><b>Context</b>: ", d.tsv$text
+                                       )
+                            )
+                      ) + 
+           scale_color_manual(values = color_manual) +
+           scale_shape_manual(values = shape_manual) +
+           theme_bw() 
+         
+         ggplotly(p, tooltip = "text", opacity=0.5) %>%
+           layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                  xaxis = list(scaleanchor = "y", scaleratio = 1),
+                  dragmode =  "select")
+         })
+
+```
+
+## chat {#chat}
+```{r, anchor = "Table", echo=FALSE}
+
+l <- "safety_belt"
+d.concept <- d.clust %>% 
+  filter(concept == l) %>%
+  select('cluster', 'distance_cityblock', 'filter.fisher','filter.llr','filter.power') %>%
+  mutate(distance_cityblock*filter.llr,
+         distance_cityblock*filter.fisher,
+         distance_cityblock*filter.power) %>%
+  select(-starts_with('filter'))
+
+d.concept$semantics <- c(
+"riem as 'oar/paddle', more in the idiom 'roeien met de riemen die men heeft'",
+"<ul class='intable'><li>riem as 'shoulder/waistbelt', more specifically in the idiom 'een hart onder de riem steken'</li><li>gordel as 'belt', more specifically in the idioms 'een slag/stoot onder de gordel'</li></ul>",
+"'safety belt'",
+"<ul class='intable'><li>gordel as 'waistbelt', often as 'judo/karate belt'</li><li>riem as 'waistbelt', often in fashion context (with leren)</li></ul>",
+"<ul class='intable'><li>gordel as 'encircling area' (e.g. groene gordel) and as 'safety belt'</li><li>riem as 'waistbelt', more specifically in the idiom 'de riem afleggen' and in fashion context</li></ul>")
+
+tableList <- list()
+for (cl in 1:5) {
+  
+  freqs <- d.clust %>% 
+    filter(concept == l & cluster == cl) %>%
+    select(starts_with('var'))
+  
+  freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  
+  variants <- as.character(freqs$variants)
+  
+  colnames(freqs.m) <- c("BE","NL")
+  rownames(freqs.m) <- str_split(variants,"/")[[1]]
+  
+  tableList[[cl]] <- kable(freqs.m)
 }
 
-ui <- pageWithSidebar(
+d.concept <- d.concept %>% add_column(table=tableList, .before="distance_cityblock")
 
-  headerPanel("Dynamic number of plots"),
 
-  sidebarPanel(
-    sliderInput("n", "Number of plots", value=1, min=1, max=5)
-  ),
+colnames(d.concept) <- c("Cluster", "Contigency table", "No filter", "LLR filter", "Fisher filter","power filter","Semantics")
 
-  mainPanel(
-    # This is the dynamic UI for the plots
-    uiOutput("plots")
+kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape = FALSE) %>% 
+  kable_styling(full_width = T) %>%
+  add_header_above(c("","","City Block"=4,"")) %>%
+  column_spec(c(1:7), extra_css = "vertical-align:middle;")
+```
+```{r, chat, echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+conceptName = "chat"
+
+# the UI bit:
+fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("shape_coding_",conceptName),
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+          )
+        # fluidRow(
+        #     column(width=12,plotlyOutput("myplot"))
+        # )
+    )
   )
-)
 
-shinyApp(ui = ui, server = server)
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
 
-``` -->
+# the server bit:
+renderPlotly({
+  
+  conceptName = "chat"
+
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
+ 
+# open and store dataframe
+
+d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove "small font" tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+  rows_matrices <- list()
+  d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+  tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+  colnames(d) <- tokenids$row_items
+  rownames(d) <- tokenids$row_items
+  
+  dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+  
+  hcl <- hclust(as.dist(dst), method="ward.D2")
+  dend <- as.dendrogram(hcl)
+  
+  if (dynamic_method == TRUE) {
+    clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+    
+    clusters <- clusters[order.dendrogram(dend)]
+    clusters_numbers <- unique(clusters) - (0 %in% clusters)
+    n_clusters <- length(clusters_numbers)
+    
+    clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+    clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+    clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+    
+    variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+    lect_types <- c("BE-Du", "NL-Du")
+    
+    } else {
+      clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+      
+      }
+  
+  d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+  d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+
+  set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+  set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
+  }
+
+         p <- ggplot(d.tsv, aes(model.x,model.y)) +
+           geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                 shape=input[[paste0("shape_coding_",conceptName)]]) + 
+                        aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                       "<b>Word</b>: ", d.tsv$lemma,"|",
+                                       "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                       "</br><b>Token</b>: ", d.tsv$`_id`,
+                                       "</br></br><b>Context</b>: ", d.tsv$text
+                                       )
+                            )
+                      ) + 
+           scale_color_manual(values = color_manual) +
+           scale_shape_manual(values = shape_manual) +
+           theme_bw() 
+         
+         ggplotly(p, tooltip = "text", opacity=0.5) %>%
+           layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                  xaxis = list(scaleanchor = "y", scaleratio = 1),
+                  dragmode =  "select")
+         })
+
+```
+
+## opening hours {#openinghours}
+```{r, anchor = "Table", echo=FALSE}
+
+l <- "safety_belt"
+d.concept <- d.clust %>% 
+  filter(concept == l) %>%
+  select('cluster', 'distance_cityblock', 'filter.fisher','filter.llr','filter.power') %>%
+  mutate(distance_cityblock*filter.llr,
+         distance_cityblock*filter.fisher,
+         distance_cityblock*filter.power) %>%
+  select(-starts_with('filter'))
+
+d.concept$semantics <- c(
+"riem as 'oar/paddle', more in the idiom 'roeien met de riemen die men heeft'",
+"<ul class='intable'><li>riem as 'shoulder/waistbelt', more specifically in the idiom 'een hart onder de riem steken'</li><li>gordel as 'belt', more specifically in the idioms 'een slag/stoot onder de gordel'</li></ul>",
+"'safety belt'",
+"<ul class='intable'><li>gordel as 'waistbelt', often as 'judo/karate belt'</li><li>riem as 'waistbelt', often in fashion context (with leren)</li></ul>",
+"<ul class='intable'><li>gordel as 'encircling area' (e.g. groene gordel) and as 'safety belt'</li><li>riem as 'waistbelt', more specifically in the idiom 'de riem afleggen' and in fashion context</li></ul>")
+
+tableList <- list()
+for (cl in 1:5) {
+  
+  freqs <- d.clust %>% 
+    filter(concept == l & cluster == cl) %>%
+    select(starts_with('var'))
+  
+  freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  
+  variants <- as.character(freqs$variants)
+  
+  colnames(freqs.m) <- c("BE","NL")
+  rownames(freqs.m) <- str_split(variants,"/")[[1]]
+  
+  tableList[[cl]] <- kable(freqs.m)
+}
+
+d.concept <- d.concept %>% add_column(table=tableList, .before="distance_cityblock")
+
+
+colnames(d.concept) <- c("Cluster", "Contigency table", "No filter", "LLR filter", "Fisher filter","power filter","Semantics")
+
+kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape = FALSE) %>% 
+  kable_styling(full_width = T) %>%
+  add_header_above(c("","","City Block"=4,"")) %>%
+  column_spec(c(1:7), extra_css = "vertical-align:middle;")
+```
+```{r, opening_hours, echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+conceptName = "opening_hours"
+
+# the UI bit:
+fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("shape_coding_",conceptName),
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+          )
+        # fluidRow(
+        #     column(width=12,plotlyOutput("myplot"))
+        # )
+    )
+  )
+
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+# the server bit:
+renderPlotly({
+  
+  conceptName = "opening_hours"
+
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
+ 
+# open and store dataframe
+
+d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove "small font" tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+  rows_matrices <- list()
+  d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+  tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+  colnames(d) <- tokenids$row_items
+  rownames(d) <- tokenids$row_items
+  
+  dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+  
+  hcl <- hclust(as.dist(dst), method="ward.D2")
+  dend <- as.dendrogram(hcl)
+  
+  if (dynamic_method == TRUE) {
+    clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+    
+    clusters <- clusters[order.dendrogram(dend)]
+    clusters_numbers <- unique(clusters) - (0 %in% clusters)
+    n_clusters <- length(clusters_numbers)
+    
+    clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+    clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+    clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+    
+    variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+    lect_types <- c("BE-Du", "NL-Du")
+    
+    } else {
+      clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+      
+      }
+  
+  d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+  d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+
+  set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+  set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
+  }
+
+         p <- ggplot(d.tsv, aes(model.x,model.y)) +
+           geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                 shape=input[[paste0("shape_coding_",conceptName)]]) + 
+                        aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                       "<b>Word</b>: ", d.tsv$lemma,"|",
+                                       "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                       "</br><b>Token</b>: ", d.tsv$`_id`,
+                                       "</br></br><b>Context</b>: ", d.tsv$text
+                                       )
+                            )
+                      ) + 
+           scale_color_manual(values = color_manual) +
+           scale_shape_manual(values = shape_manual) +
+           theme_bw() 
+         
+         ggplotly(p, tooltip = "text", opacity=0.5) %>%
+           layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                  xaxis = list(scaleanchor = "y", scaleratio = 1),
+                  dragmode =  "select")
+         })
+
+```
+
+## dip {#dip}
+```{r, anchor = "Table", echo=FALSE}
+
+l <- "safety_belt"
+d.concept <- d.clust %>% 
+  filter(concept == l) %>%
+  select('cluster', 'distance_cityblock', 'filter.fisher','filter.llr','filter.power') %>%
+  mutate(distance_cityblock*filter.llr,
+         distance_cityblock*filter.fisher,
+         distance_cityblock*filter.power) %>%
+  select(-starts_with('filter'))
+
+d.concept$semantics <- c(
+"riem as 'oar/paddle', more in the idiom 'roeien met de riemen die men heeft'",
+"<ul class='intable'><li>riem as 'shoulder/waistbelt', more specifically in the idiom 'een hart onder de riem steken'</li><li>gordel as 'belt', more specifically in the idioms 'een slag/stoot onder de gordel'</li></ul>",
+"'safety belt'",
+"<ul class='intable'><li>gordel as 'waistbelt', often as 'judo/karate belt'</li><li>riem as 'waistbelt', often in fashion context (with leren)</li></ul>",
+"<ul class='intable'><li>gordel as 'encircling area' (e.g. groene gordel) and as 'safety belt'</li><li>riem as 'waistbelt', more specifically in the idiom 'de riem afleggen' and in fashion context</li></ul>")
+
+tableList <- list()
+for (cl in 1:5) {
+  
+  freqs <- d.clust %>% 
+    filter(concept == l & cluster == cl) %>%
+    select(starts_with('var'))
+  
+  freqs.m <- matrix(freqs %>% select(-variants), ncol=2)
+  
+  variants <- as.character(freqs$variants)
+  
+  colnames(freqs.m) <- c("BE","NL")
+  rownames(freqs.m) <- str_split(variants,"/")[[1]]
+  
+  tableList[[cl]] <- kable(freqs.m)
+}
+
+d.concept <- d.concept %>% add_column(table=tableList, .before="distance_cityblock")
+
+
+colnames(d.concept) <- c("Cluster", "Contigency table", "No filter", "LLR filter", "Fisher filter","power filter","Semantics")
+
+kable(d.concept, caption= str_c("Definitions of '", l, "'."), digits = 3, escape = FALSE) %>% 
+  kable_styling(full_width = T) %>%
+  add_header_above(c("","","City Block"=4,"")) %>%
+  column_spec(c(1:7), extra_css = "vertical-align:middle;")
+```
+```{r, dip, echo=FALSE}
+# change path for retrieving dataframe of semantic nMDS- or tSNE-coordinates and metadata information
+
+conceptName = "dip"
+
+# the UI bit:
+fluidPage(
+        box(status = "primary", solidHeader = TRUE,
+        fluidRow(width=4,
+            column(width=4, selectInput(inputId = paste0("color_coding_",conceptName),
+                        label = "Color coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+            column(width=4, selectInput(inputId = paste0("shape_coding_",conceptName),
+                        label = "Shape coding:",
+                        choices = c("cluster","lemma","country"),
+                        multiple = TRUE)),
+          )
+        # fluidRow(
+        #     column(width=12,plotlyOutput("myplot"))
+        # )
+    )
+  )
+
+`+.uneval` <- function(a,b) {
+    `class<-`(modifyList(a,b), "uneval")
+}
+
+# the server bit:
+renderPlotly({
+  
+  conceptName = "dip"
+
+dynamic_method = FALSE
+clustering = TRUE
+suffix = ".freq3ppmi1"
+ 
+# open and store dataframe
+
+d.tsv <- read.csv(paste0(conceptName,"/",conceptName,".tsne.tsv"),header=T, sep="\t", quote="", check.names = F, encoding="UTF8")
+
+# target token in bold face
+d.tsv$`_ctxt.model` <- gsub("<span(<br>|\\s)class='target'>([^<]+)</span>","<b>\\2</b>", d.tsv$`_ctxt.model`)
+# significant context words in italics
+d.tsv$`_ctxt.model` <- gsub("<u>([^<]+)</u>", "<i>\\1</i>", d.tsv$`_ctxt.model`)
+# remove "small font" tags for context words outside of context window
+d.tsv$`_ctxt.model` <- gsub("</?small>", "", d.tsv$`_ctxt.model`)
+# insert line breaks every 50 characters in the concordance of a token
+# (in order to avoid long stretches of text in the visualization)
+d.tsv$`_ctxt.model` <- gsub("(.{50,}?)\\s", "\\1<br>", d.tsv$`_ctxt.model`)
+d.tsv$text <- d.tsv$`_ctxt.model`
+
+rownames(d.tsv) <- d.tsv$`_id`
+
+if (clustering == TRUE) {
+  rows_matrices <- list()
+  d <- npyLoad(paste0(conceptName,"/",conceptName,suffix,".ttmx.npy"))
+  tokenids <- fromJSON(file = paste0(conceptName,"/",conceptName,suffix,".ttmx.meta"))
+  colnames(d) <- tokenids$row_items
+  rownames(d) <- tokenids$row_items
+  
+  dst <- as.dist(as.matrix(d)) # 1000 randomly selected tokens
+  
+  hcl <- hclust(as.dist(dst), method="ward.D2")
+  dend <- as.dendrogram(hcl)
+  
+  if (dynamic_method == TRUE) {
+    clusters <- cutreeDynamic(hcl, distM = dst, method = "tree")
+    
+    clusters <- clusters[order.dendrogram(dend)]
+    clusters_numbers <- unique(clusters) - (0 %in% clusters)
+    n_clusters <- length(clusters_numbers)
+    
+    clusters_final <- cutree(dend, k=n_clusters, order_clusters_as_data = FALSE)
+    clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+    clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+    
+    variant_types <- unique(gsub("^([^/]+)/.+","\\1",clusters.df$tokens,perl=T))
+    lect_types <- c("BE-Du", "NL-Du")
+    
+    } else {
+      clusters_final <- cutree(dend, k=5, order_clusters_as_data = FALSE)
+      clusters.df <- data.frame(tokens=names(clusters_final),cluster=clusters_final)
+      clusters.df$cluster <- as.factor(as.character(clusters.df$cluster))
+      
+      }
+  
+  d.tsv$cluster <- clusters.df[rownames(d.tsv), "cluster"]
+  d.tsv$cluster <- as.factor(as.character(d.tsv$cluster))
+
+  set.seed(1990); shape_manual <- sample(c(3,2,16,7,8), length(levels(d.tsv$cluster)))
+  set.seed(1990); color_manual <- sample(c("firebrick2","limegreen","royalblue2","grey30","gold"), length(levels(d.tsv$cluster)))
+  }
+
+         p <- ggplot(d.tsv, aes(model.x,model.y)) +
+           geom_point(aes_string(colour=input[[paste0("color_coding_",conceptName)]], 
+                                 shape=input[[paste0("shape_coding_",conceptName)]]) + 
+                        aes(text=paste("<b>Country</b>: ", d.tsv$country,"|",
+                                       "<b>Word</b>: ", d.tsv$lemma,"|",
+                                       "<b>Newspaper</b>: ", d.tsv$newspaper,
+                                       "</br><b>Token</b>: ", d.tsv$`_id`,
+                                       "</br></br><b>Context</b>: ", d.tsv$text
+                                       )
+                            )
+                      ) + 
+           scale_color_manual(values = color_manual) +
+           scale_shape_manual(values = shape_manual) +
+           theme_bw() 
+         
+         ggplotly(p, tooltip = "text", opacity=0.5) %>%
+           layout(hoverlabel = list(bgcolor=c("rgb(255,255,204"), align="left"),
+                  xaxis = list(scaleanchor = "y", scaleratio = 1),
+                  dragmode =  "select")
+         })
+
+```
+
+
 
 Some other text to show here

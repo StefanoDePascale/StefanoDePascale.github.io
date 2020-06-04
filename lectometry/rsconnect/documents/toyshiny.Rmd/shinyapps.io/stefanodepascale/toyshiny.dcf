@@ -1,0 +1,12 @@
+name: toyshiny
+title: toyshiny
+username:
+account: stefanodepascale
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2381601
+bundleId: 3208113
+url: https://stefanodepascale.shinyapps.io/toyshiny/
+when: 1590850337.79878
+asMultiple: FALSE
+asStatic: FALSE

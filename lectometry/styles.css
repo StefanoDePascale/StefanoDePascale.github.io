@@ -62,10 +62,21 @@ intable {
 }
 
 span.reference {
-  padding: 1px 2px 1px 2px;
-  border: 0.5px solid #6699FF;
-  border-radius: 5px;
-  background: white;
+  background: #fff;
+  border: solid 1px #e1e4e5;
+  font-size: 85%;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0 5px;
+  white-space: pre;
+  font-family: Menlo,Monaco,Consolas,"Courier New",monospace;
+  border-radius: 4px;
+  color: #c7254e;
+}
+
+span.concept {
+  text-transform: lowercase !important; 
+  font-variant: small-caps !important;
 }
 
 /* Everything greeeen */

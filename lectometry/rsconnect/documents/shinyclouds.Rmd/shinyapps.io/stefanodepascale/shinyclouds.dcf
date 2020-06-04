@@ -1,0 +1,12 @@
+name: shinyclouds
+title: shinyclouds
+username:
+account: stefanodepascale
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2381245
+bundleId: 3208008
+url: https://stefanodepascale.shinyapps.io/shinyclouds/
+when: 1590847123.58559
+asMultiple: FALSE
+asStatic: FALSE

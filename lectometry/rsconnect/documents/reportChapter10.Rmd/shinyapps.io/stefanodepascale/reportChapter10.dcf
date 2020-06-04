@@ -1,0 +1,12 @@
+name: reportChapter10
+title: reportChapter10
+username:
+account: stefanodepascale
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2395915
+bundleId: 3219046
+url: https://stefanodepascale.shinyapps.io/reportChapter10/
+when: 1591113495.12181
+asMultiple: FALSE
+asStatic: FALSE
